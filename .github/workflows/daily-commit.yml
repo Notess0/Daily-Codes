@@ -6,7 +6,7 @@ on:
   workflow_dispatch:        # Manual trigger from GitHub UI
 
 permissions:
-  contents: write           # ← FIXES exit code 128 (allows git push)
+  contents: write
 
 jobs:
   commit-daily-code:
@@ -72,9 +72,10 @@ jobs:
           echo "$CODE" > "$FILEPATH"
           echo "Generated $(echo "$CODE" | wc -l) lines of $LANG code"
 
-          # Commit and push
+          # Pull first, then commit and push
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull origin main --rebase
           git add "$FILEPATH"
           git commit -m "chore: daily $LANG snippet – $DATEISO"
           git push
