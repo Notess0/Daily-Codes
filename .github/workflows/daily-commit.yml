@@ -17,11 +17,33 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Pull latest changes
-        run: git pull origin main --rebase
+      - name: Setup git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull origin main
+
+      - name: Check if already committed today
+        id: check
+        run: |
+          DAY=$(date +%u)
+          DATE=$(date +%Y_%m_%d)
+          if [ "$DAY" = "1" ] || [ "$DAY" = "4" ]; then LANG="flutter"; EXT="dart"
+          elif [ "$DAY" = "2" ] || [ "$DAY" = "5" ]; then LANG="cpp"; EXT="cpp"
+          else LANG="html"; EXT="html"; fi
+          FILEPATH="${LANG}/${LANG}_${DATE}.${EXT}"
+          if [ -f "$FILEPATH" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "File already exists: $FILEPATH — skipping."
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+            echo "File does not exist, will generate: $FILEPATH"
+          fi
 
       - name: Generate and commit code
+        if: steps.check.outputs.skip == 'false'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
@@ -44,48 +66,30 @@ jobs:
           mkdir -p "$LANG"
           echo "Language: $LANG | File: $FILEPATH"
 
-          # Skip if today's file already exists
-          if [ -f "$FILEPATH" ]; then
-            echo "File $FILEPATH already exists, skipping."
-            exit 0
-          fi
-
-          # Call Anthropic API
           RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
             -H "x-api-key: $ANTHROPIC_API_KEY" \
             -H "anthropic-version: 2023-06-01" \
             -H "content-type: application/json" \
-            -d "{
-              \"model\": \"claude-haiku-4-5-20251001\",
-              \"max_tokens\": 1024,
-              \"messages\": [{
-                \"role\": \"user\",
-                \"content\": \"$PROMPT\"
-              }]
-            }")
+            -d "{\"model\":\"claude-haiku-4-5-20251001\",\"max_tokens\":1024,\"messages\":[{\"role\":\"user\",\"content\":\"$PROMPT\"}]}")
 
-          # Extract and clean code
           CODE=$(echo "$RESPONSE" | python3 -c "
 import sys, json, re
 data = json.load(sys.stdin)
 text = ''.join(b.get('text','') for b in data.get('content',[]))
-text = re.sub(r'^\\`\\`\\`[\\w]*\\n?', '', text.strip())
-text = re.sub(r'\\n?\\`\\`\\`$', '', text.strip())
+text = re.sub(r'^\`\`\`[\w]*\n?', '', text.strip())
+text = re.sub(r'\n?\`\`\`$', '', text.strip())
 print(text)
 ")
 
           if [ -z "$CODE" ]; then
             echo "ERROR: Empty response from Claude"
-            echo "API Response: $RESPONSE"
+            echo "$RESPONSE"
             exit 1
           fi
 
           echo "$CODE" > "$FILEPATH"
           echo "Generated $(echo "$CODE" | wc -l) lines of $LANG code"
 
-          # Commit and push
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add "$FILEPATH"
           git commit -m "chore: daily $LANG snippet - $DATEISO"
           git push
