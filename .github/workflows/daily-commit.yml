@@ -1,0 +1,84 @@
+name: Daily Code Commit
+
+on:
+  schedule:
+    - cron: '0 6 * * *'   # Runs every day at 6:00 AM UTC (11 AM Pakistan time)
+  workflow_dispatch:        # Also allows manual trigger from GitHub UI
+
+jobs:
+  commit-daily-code:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Generate and commit code
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Pick language based on day of week
+          DAY=$(date +%u)   # 1=Mon ... 7=Sun
+          DATE=$(date +%Y_%m_%d)
+          DATEISO=$(date +%Y-%m-%d)
+
+          if [ "$DAY" = "1" ] || [ "$DAY" = "4" ]; then
+            LANG="flutter"; EXT="dart"
+            PROMPT="Generate a simple Flutter Dart widget (40-60 lines). Real Flutter/Dart syntax. A small complete widget: custom button, animated card, gradient container, or countdown timer. All imports included. Output only raw code, no markdown fences, no explanation."
+          elif [ "$DAY" = "2" ] || [ "$DAY" = "5" ]; then
+            LANG="cpp"; EXT="cpp"
+            PROMPT="Generate a simple C++ program (30-50 lines). Could be fibonacci, sorting algorithm, string manipulation, pattern printer, or basic calculator. C++17. Include headers. Output only raw code, no markdown fences, no explanation."
+          else
+            LANG="html"; EXT="html"
+            PROMPT="Generate a single-file HTML page (50-70 lines) with embedded CSS and minimal JS. Could be animated landing, card UI, gradient buttons, or simple calculator. Make it visually interesting. Output only raw code, no markdown fences, no explanation."
+          fi
+
+          FILEPATH="${LANG}/${LANG}_${DATE}.${EXT}"
+          mkdir -p "$LANG"
+
+          echo "Language: $LANG | File: $FILEPATH"
+
+          # Call Anthropic API
+          RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -d "{
+              \"model\": \"claude-opus-4-5\",
+              \"max_tokens\": 1024,
+              \"messages\": [{
+                \"role\": \"user\",
+                \"content\": \"$PROMPT\"
+              }]
+            }")
+
+          # Extract code from response
+          CODE=$(echo "$RESPONSE" | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          text = ''.join(b.get('text','') for b in data.get('content',[]))
+          # Strip markdown fences if present
+          import re
+          text = re.sub(r'^\`\`\`[\w]*\n?', '', text.strip())
+          text = re.sub(r'\n?\`\`\`$', '', text.strip())
+          print(text)
+          ")
+
+          if [ -z "$CODE" ]; then
+            echo "ERROR: Empty response from Claude"
+            echo "API Response: $RESPONSE"
+            exit 1
+          fi
+
+          echo "$CODE" > "$FILEPATH"
+          echo "Generated $(echo "$CODE" | wc -l) lines of $LANG code"
+
+          # Commit
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$FILEPATH"
+          git commit -m "chore: daily $LANG snippet – $DATEISO"
+          git push
+
+          echo "✅ Committed $FILEPATH successfully!"
