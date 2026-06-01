@@ -15,6 +15,11 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Pull latest changes
+        run: git pull origin main --rebase
 
       - name: Generate and commit code
         env:
@@ -39,6 +44,12 @@ jobs:
           mkdir -p "$LANG"
           echo "Language: $LANG | File: $FILEPATH"
 
+          # Skip if today's file already exists
+          if [ -f "$FILEPATH" ]; then
+            echo "File $FILEPATH already exists, skipping."
+            exit 0
+          fi
+
           # Call Anthropic API
           RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
             -H "x-api-key: $ANTHROPIC_API_KEY" \
@@ -55,13 +66,13 @@ jobs:
 
           # Extract and clean code
           CODE=$(echo "$RESPONSE" | python3 -c "
-          import sys, json, re
-          data = json.load(sys.stdin)
-          text = ''.join(b.get('text','') for b in data.get('content',[]))
-          text = re.sub(r'^\`\`\`[\w]*\n?', '', text.strip())
-          text = re.sub(r'\n?\`\`\`$', '', text.strip())
-          print(text)
-          ")
+import sys, json, re
+data = json.load(sys.stdin)
+text = ''.join(b.get('text','') for b in data.get('content',[]))
+text = re.sub(r'^\\`\\`\\`[\\w]*\\n?', '', text.strip())
+text = re.sub(r'\\n?\\`\\`\\`$', '', text.strip())
+print(text)
+")
 
           if [ -z "$CODE" ]; then
             echo "ERROR: Empty response from Claude"
@@ -72,12 +83,11 @@ jobs:
           echo "$CODE" > "$FILEPATH"
           echo "Generated $(echo "$CODE" | wc -l) lines of $LANG code"
 
-          # Pull first, then commit and push
+          # Commit and push
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git pull origin main --rebase
           git add "$FILEPATH"
-          git commit -m "chore: daily $LANG snippet – $DATEISO"
+          git commit -m "chore: daily $LANG snippet - $DATEISO"
           git push
 
-          echo "✅ Committed $FILEPATH successfully!"
+          echo "Committed $FILEPATH successfully!"
