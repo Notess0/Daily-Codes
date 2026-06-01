@@ -2,8 +2,11 @@ name: Daily Code Commit
 
 on:
   schedule:
-    - cron: '0 6 * * *'   # Runs every day at 6:00 AM UTC (11 AM Pakistan time)
-  workflow_dispatch:        # Also allows manual trigger from GitHub UI
+    - cron: '0 6 * * *'   # Every day at 6:00 AM UTC (11 AM Pakistan time)
+  workflow_dispatch:        # Manual trigger from GitHub UI
+
+permissions:
+  contents: write           # ← FIXES exit code 128 (allows git push)
 
 jobs:
   commit-daily-code:
@@ -16,10 +19,8 @@ jobs:
       - name: Generate and commit code
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Pick language based on day of week
-          DAY=$(date +%u)   # 1=Mon ... 7=Sun
+          DAY=$(date +%u)
           DATE=$(date +%Y_%m_%d)
           DATEISO=$(date +%Y-%m-%d)
 
@@ -36,7 +37,6 @@ jobs:
 
           FILEPATH="${LANG}/${LANG}_${DATE}.${EXT}"
           mkdir -p "$LANG"
-
           echo "Language: $LANG | File: $FILEPATH"
 
           # Call Anthropic API
@@ -45,7 +45,7 @@ jobs:
             -H "anthropic-version: 2023-06-01" \
             -H "content-type: application/json" \
             -d "{
-              \"model\": \"claude-opus-4-5\",
+              \"model\": \"claude-haiku-4-5-20251001\",
               \"max_tokens\": 1024,
               \"messages\": [{
                 \"role\": \"user\",
@@ -53,13 +53,11 @@ jobs:
               }]
             }")
 
-          # Extract code from response
+          # Extract and clean code
           CODE=$(echo "$RESPONSE" | python3 -c "
-          import sys, json
+          import sys, json, re
           data = json.load(sys.stdin)
           text = ''.join(b.get('text','') for b in data.get('content',[]))
-          # Strip markdown fences if present
-          import re
           text = re.sub(r'^\`\`\`[\w]*\n?', '', text.strip())
           text = re.sub(r'\n?\`\`\`$', '', text.strip())
           print(text)
@@ -74,7 +72,7 @@ jobs:
           echo "$CODE" > "$FILEPATH"
           echo "Generated $(echo "$CODE" | wc -l) lines of $LANG code"
 
-          # Commit
+          # Commit and push
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add "$FILEPATH"
