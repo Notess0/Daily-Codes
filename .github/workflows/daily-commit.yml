@@ -2,8 +2,8 @@ name: Daily Code Commit
 
 on:
   schedule:
-    - cron: '0 17 * * *'   # Every day at 5:00 PM UTC = 10:00 PM Pakistan time (PKT)
-  workflow_dispatch:        # Manual trigger from GitHub UI
+    - cron: '0 17 * * *'   # Every day 5:00 PM UTC = 10:00 PM Pakistan (PKT)
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -19,110 +19,83 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Setup git and sync
+      - name: Sync to latest remote (no conflict)
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git pull origin main
+          git fetch origin main
+          git reset --hard origin/main
 
-      - name: Pick language and check if file exists
+      - name: Pick language and check if already done today
         id: check
         run: |
-          # 8 languages cycling by day-of-year mod 8
-          DOY=$(date +%j)   # day of year 1-365
+          DOY=$(date +%j)
           IDX=$(( (DOY - 1) % 8 ))
           DATE=$(date +%Y_%m_%d)
-
           case $IDX in
-            0) LANG="flutter";  EXT="dart" ;;
-            1) LANG="cpp";      EXT="cpp"  ;;
-            2) LANG="html";     EXT="html" ;;
-            3) LANG="php";      EXT="php"  ;;
-            4) LANG="python";   EXT="py"   ;;
-            5) LANG="sql";      EXT="sql"  ;;
-            6) LANG="android";  EXT="java" ;;
-            7) LANG="dart";     EXT="dart" ;;
+            0) LANG="flutter"; EXT="dart" ;;
+            1) LANG="cpp";     EXT="cpp"  ;;
+            2) LANG="html";    EXT="html" ;;
+            3) LANG="php";     EXT="php"  ;;
+            4) LANG="python";  EXT="py"   ;;
+            5) LANG="sql";     EXT="sql"  ;;
+            6) LANG="android"; EXT="java" ;;
+            7) LANG="dart";    EXT="dart" ;;
           esac
-
           FILEPATH="${LANG}/${LANG}_${DATE}.${EXT}"
           echo "lang=$LANG"         >> $GITHUB_OUTPUT
           echo "ext=$EXT"           >> $GITHUB_OUTPUT
           echo "filepath=$FILEPATH" >> $GITHUB_OUTPUT
-
           if [ -f "$FILEPATH" ]; then
-            echo "skip=true" >> $GITHUB_OUTPUT
-            echo "File already exists: $FILEPATH - skipping."
+            echo "skip=true"  >> $GITHUB_OUTPUT
+            echo "Already committed today: $FILEPATH"
           else
             echo "skip=false" >> $GITHUB_OUTPUT
             echo "Will generate: $FILEPATH"
           fi
 
-      - name: Generate and commit code
+      - name: Generate code via Claude AI
         if: steps.check.outputs.skip == 'false'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           LANG="${{ steps.check.outputs.lang }}"
-          EXT="${{ steps.check.outputs.ext }}"
           FILEPATH="${{ steps.check.outputs.filepath }}"
           DATEISO=$(date +%Y-%m-%d)
 
           case $LANG in
-            flutter)
-              PROMPT="Generate a simple Flutter Dart widget (40-60 lines). Real Flutter/Dart syntax. A small complete widget: animated card, gradient container, custom button, or countdown timer. All imports included. Output only raw code, no markdown fences, no explanation."
-              ;;
-            cpp)
-              PROMPT="Generate a simple C++ program (30-50 lines). Could be fibonacci, sorting algorithm, linked list, string manipulation, or pattern printer. C++17, include headers. Output only raw code, no markdown fences, no explanation."
-              ;;
-            html)
-              PROMPT="Generate a single-file HTML page (50-70 lines) with embedded CSS and JS. Could be animated landing page, card UI, gradient buttons, or a simple calculator. Make it visually interesting. Output only raw code, no markdown fences, no explanation."
-              ;;
-            php)
-              PROMPT="Generate a simple PHP script (30-50 lines). Could be a form handler, user login system snippet, CRUD example, session manager, or array manipulation utility. Use PHP 8 syntax. Output only raw code, no markdown fences, no explanation."
-              ;;
-            python)
-              PROMPT="Generate a simple Python script (30-50 lines). Could be a file organizer, web scraper snippet, data analyzer, OOP class example, or algorithm implementation. Use Python 3.10+. Output only raw code, no markdown fences, no explanation."
-              ;;
-            sql)
-              PROMPT="Generate a SQL script (20-40 lines). Could be table creation with constraints, complex SELECT with JOINs, stored procedure, trigger, or index optimization example. Use standard SQL. Output only raw code, no markdown fences, no explanation."
-              ;;
-            android)
-              PROMPT="Generate a simple Android Java Activity or utility class (40-60 lines). Could be a custom View, RecyclerView adapter, permission handler, or SharedPreferences helper. Use Android SDK conventions. Output only raw code, no markdown fences, no explanation."
-              ;;
-            dart)
-              PROMPT="Generate a simple Dart script or class (30-50 lines). Could be a linked list, async/await example, stream handler, OOP class, or algorithm. Pure Dart, no Flutter. Output only raw code, no markdown fences, no explanation."
-              ;;
+            flutter) PROMPT="Generate a simple Flutter Dart widget (40-60 lines). Real Flutter/Dart syntax. Small complete widget: animated card, gradient container, custom button, or countdown timer. All imports included. Output only raw code, no markdown fences, no explanation." ;;
+            cpp)     PROMPT="Generate a simple C++ program (30-50 lines). Could be fibonacci, sorting, linked list, string manipulation, or pattern printer. C++17, include headers. Output only raw code, no markdown fences, no explanation." ;;
+            html)    PROMPT="Generate a single-file HTML page (50-70 lines) with embedded CSS and JS. Could be animated landing, card UI, gradient buttons, or calculator. Make it visually interesting. Output only raw code, no markdown fences, no explanation." ;;
+            php)     PROMPT="Generate a simple PHP script (30-50 lines). Could be form handler, login snippet, CRUD example, session manager, or array utility. PHP 8 syntax. Output only raw code, no markdown fences, no explanation." ;;
+            python)  PROMPT="Generate a simple Python script (30-50 lines). Could be file organizer, scraper snippet, data analyzer, OOP class, or algorithm. Python 3.10+. Output only raw code, no markdown fences, no explanation." ;;
+            sql)     PROMPT="Generate a SQL script (20-40 lines). Could be table creation with constraints, SELECT with JOINs, stored procedure, trigger, or index example. Standard SQL. Output only raw code, no markdown fences, no explanation." ;;
+            android) PROMPT="Generate a simple Android Java Activity or utility class (40-60 lines). Could be custom View, RecyclerView adapter, permission handler, or SharedPreferences helper. Android SDK conventions. Output only raw code, no markdown fences, no explanation." ;;
+            dart)    PROMPT="Generate a simple Dart script or class (30-50 lines). Could be linked list, async/await, stream handler, OOP class, or algorithm. Pure Dart, no Flutter. Output only raw code, no markdown fences, no explanation." ;;
           esac
 
           mkdir -p "$LANG"
-          echo "Language: $LANG | File: $FILEPATH"
 
-          RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
+          RESPONSE=$(curl -sf https://api.anthropic.com/v1/messages \
             -H "x-api-key: $ANTHROPIC_API_KEY" \
             -H "anthropic-version: 2023-06-01" \
             -H "content-type: application/json" \
             -d "{\"model\":\"claude-haiku-4-5-20251001\",\"max_tokens\":1024,\"messages\":[{\"role\":\"user\",\"content\":\"$PROMPT\"}]}")
 
           CODE=$(echo "$RESPONSE" | python3 -c "
-import sys, json, re
-data = json.load(sys.stdin)
-text = ''.join(b.get('text','') for b in data.get('content',[]))
-text = re.sub(r'^\`\`\`[\w]*\n?', '', text.strip())
-text = re.sub(r'\n?\`\`\`$', '', text.strip())
-print(text)
+import sys,json,re
+d=json.load(sys.stdin)
+t=''.join(b.get('text','') for b in d.get('content',[]))
+t=re.sub(r'^\`\`\`[\w]*\n?','',t.strip())
+t=re.sub(r'\n?\`\`\`$','',t.strip())
+print(t)
 ")
-
-          if [ -z "$CODE" ]; then
-            echo "ERROR: Empty response from Claude"
-            echo "$RESPONSE"
-            exit 1
-          fi
+          [ -z "$CODE" ] && { echo "Empty response: $RESPONSE"; exit 1; }
 
           echo "$CODE" > "$FILEPATH"
-          echo "Generated $(echo "$CODE" | wc -l) lines of $LANG code"
+          echo "Generated $(wc -l < $FILEPATH) lines of $LANG"
 
           git add "$FILEPATH"
           git commit -m "chore: daily $LANG snippet - $DATEISO"
           git push
-
-          echo "Committed $FILEPATH successfully!"
+          echo "Done: $FILEPATH committed!"
