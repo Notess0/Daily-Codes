@@ -2,7 +2,7 @@ name: Daily Code Commit
 
 on:
   schedule:
-    - cron: '0 6 * * *'   # Every day at 6:00 AM UTC (11 AM Pakistan time)
+    - cron: '0 17 * * *'   # Every day at 5:00 PM UTC = 10:00 PM Pakistan time (PKT)
   workflow_dispatch:        # Manual trigger from GitHub UI
 
 permissions:
@@ -45,8 +45,8 @@ jobs:
           esac
 
           FILEPATH="${LANG}/${LANG}_${DATE}.${EXT}"
-          echo "lang=$LANG"     >> $GITHUB_OUTPUT
-          echo "ext=$EXT"       >> $GITHUB_OUTPUT
+          echo "lang=$LANG"         >> $GITHUB_OUTPUT
+          echo "ext=$EXT"           >> $GITHUB_OUTPUT
           echo "filepath=$FILEPATH" >> $GITHUB_OUTPUT
 
           if [ -f "$FILEPATH" ]; then
