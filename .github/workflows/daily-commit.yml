@@ -2,7 +2,7 @@ name: Daily Code Commit
 
 on:
   schedule:
-    - cron: '0 17 * * *'   # 5:00 PM UTC = 10:00 PM Pakistan (PKT)
+    - cron: '0 17 * * *'
   workflow_dispatch:
 
 permissions:
@@ -13,20 +13,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Generate code and commit via GitHub API
+      - name: Generate and commit via API
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
           set -e
-
-          # Pick language by day of year (8 languages cycling)
           DOY=$(date +%j)
           IDX=$(( (DOY - 1) % 8 ))
           DATE=$(date +%Y_%m_%d)
           DATEISO=$(date +%Y-%m-%d)
-
           case $IDX in
             0) LANG="flutter"; EXT="dart" ;;
             1) LANG="cpp";     EXT="cpp"  ;;
@@ -37,67 +34,26 @@ jobs:
             6) LANG="android"; EXT="java" ;;
             7) LANG="dart";    EXT="dart" ;;
           esac
-
           FILEPATH="${LANG}/${LANG}_${DATE}.${EXT}"
-          echo "Language: $LANG | File: $FILEPATH"
-
-          # Check if file already exists via GitHub API (get SHA if it does)
-          EXISTING=$(curl -sf \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${REPO}/contents/${FILEPATH}" 2>/dev/null || echo "NOT_FOUND")
-
+          echo "Lang: $LANG | File: $FILEPATH"
+          EXISTING=$(curl -s -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${REPO}/contents/${FILEPATH}" 2>/dev/null || echo "NOT_FOUND")
           if echo "$EXISTING" | grep -q '"sha"'; then
-            echo "File already exists today: $FILEPATH — skipping."
+            echo "Already exists: $FILEPATH - skipping"
             exit 0
           fi
-
-          echo "File does not exist, generating code..."
-
-          # Pick prompt
           case $LANG in
-            flutter) PROMPT="Generate a simple Flutter Dart widget (40-60 lines). Real Flutter\/Dart syntax. Small complete widget: animated card, gradient container, custom button, or countdown timer. All imports included. Output only raw code, no markdown fences, no explanation." ;;
-            cpp)     PROMPT="Generate a simple C++ program (30-50 lines). Could be fibonacci, sorting, linked list, string manipulation, or pattern printer. C++17, include headers. Output only raw code, no markdown fences, no explanation." ;;
-            html)    PROMPT="Generate a single-file HTML page (50-70 lines) with embedded CSS and JS. Animated landing, card UI, gradient buttons, or calculator. Visually interesting. Output only raw code, no markdown fences, no explanation." ;;
-            php)     PROMPT="Generate a simple PHP script (30-50 lines). Form handler, login snippet, CRUD example, session manager, or array utility. PHP 8. Output only raw code, no markdown fences, no explanation." ;;
-            python)  PROMPT="Generate a simple Python script (30-50 lines). File organizer, scraper, data analyzer, OOP class, or algorithm. Python 3.10+. Output only raw code, no markdown fences, no explanation." ;;
-            sql)     PROMPT="Generate a SQL script (20-40 lines). Table creation, SELECT with JOINs, stored procedure, trigger, or index example. Standard SQL. Output only raw code, no markdown fences, no explanation." ;;
-            android) PROMPT="Generate a simple Android Java Activity or utility (40-60 lines). Custom View, RecyclerView adapter, permission handler, or SharedPreferences helper. Android SDK. Output only raw code, no markdown fences, no explanation." ;;
-            dart)    PROMPT="Generate a simple Dart script or class (30-50 lines). Linked list, async\/await, stream, OOP class, or algorithm. Pure Dart, no Flutter. Output only raw code, no markdown fences, no explanation." ;;
+            flutter) PROMPT="Generate a simple Flutter Dart widget 40-60 lines. Real syntax. Output only raw code no markdown fences." ;;
+            cpp)     PROMPT="Generate a simple C++ program 30-50 lines C++17. Output only raw code no markdown fences." ;;
+            html)    PROMPT="Generate a single-file HTML page 50-70 lines with CSS and JS. Output only raw code no markdown fences." ;;
+            php)     PROMPT="Generate a simple PHP 8 script 30-50 lines. Output only raw code no markdown fences." ;;
+            python)  PROMPT="Generate a simple Python 3.10 script 30-50 lines. Output only raw code no markdown fences." ;;
+            sql)     PROMPT="Generate a SQL script 20-40 lines with tables and queries. Output only raw code no markdown fences." ;;
+            android) PROMPT="Generate a simple Android Java class 40-60 lines. Output only raw code no markdown fences." ;;
+            dart)    PROMPT="Generate a simple pure Dart script 30-50 lines no Flutter. Output only raw code no markdown fences." ;;
           esac
-
-          # Call Anthropic API
-          RESPONSE=$(curl -sf https://api.anthropic.com/v1/messages \
-            -H "x-api-key: $ANTHROPIC_API_KEY" \
-            -H "anthropic-version: 2023-06-01" \
-            -H "content-type: application/json" \
-            -d "{\"model\":\"claude-haiku-4-5-20251001\",\"max_tokens\":1024,\"messages\":[{\"role\":\"user\",\"content\":\"$PROMPT\"}]}")
-
-          # Extract and clean code
-          CODE=$(echo "$RESPONSE" | python3 -c "
-import sys,json,re
-d=json.load(sys.stdin)
-t=''.join(b.get('text','') for b in d.get('content',[]))
-t=re.sub(r'^\`\`\`[\w]*\n?','',t.strip())
-t=re.sub(r'\n?\`\`\`$','',t.strip())
-print(t)
-")
-          [ -z "$CODE" ] && { echo "ERROR: Empty API response: $RESPONSE"; exit 1; }
-
-          LINES=$(echo "$CODE" | wc -l)
-          echo "Generated $LINES lines of $LANG code"
-
-          # Base64 encode the code
+          RESPONSE=$(curl -s https://api.anthropic.com/v1/messages -H "x-api-key: $ANTHROPIC_API_KEY" -H "anthropic-version: 2023-06-01" -H "content-type: application/json" -d "{\"model\":\"claude-haiku-4-5-20251001\",\"max_tokens\":1024,\"messages\":[{\"role\":\"user\",\"content\":\"$PROMPT\"}]}")
+          CODE=$(echo "$RESPONSE" | python3 -c "import sys,json,re;d=json.load(sys.stdin);t=''.join(b.get('text','') for b in d.get('content',[]));t=re.sub(r'^\`\`\`[\w]*\n?','',t.strip());t=re.sub(r'\n?\`\`\`$','',t.strip());print(t)")
+          [ -z "$CODE" ] && { echo "ERROR: $RESPONSE"; exit 1; }
           ENCODED=$(echo "$CODE" | base64 -w 0)
-
-          # Commit directly via GitHub API — no git clone, no conflicts
-          COMMIT_MSG="chore: daily $LANG snippet - $DATEISO"
-          RESULT=$(curl -sf -X PUT \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            -H "Content-Type: application/json" \
-            "https://api.github.com/repos/${REPO}/contents/${FILEPATH}" \
-            -d "{\"message\":\"$COMMIT_MSG\",\"content\":\"$ENCODED\"}")
-
-          echo "Done! Committed $FILEPATH"
-          echo "$RESULT" | python3 -c "import sys,json; d=json.load(sys.stdin); print('URL:', d.get('content',{}).get('html_url',''))"
+          RESULT=$(curl -s -X PUT -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "Content-Type: application/json" "https://api.github.com/repos/${REPO}/contents/${FILEPATH}" -d "{\"message\":\"chore: daily $LANG snippet - $DATEISO\",\"content\":\"$ENCODED\"}")
+          echo "$RESULT" | python3 -c "import sys,json;d=json.load(sys.stdin);print('Done:',d.get('content',{}).get('html_url','ERROR: '+d.get('message','unknown')))"
