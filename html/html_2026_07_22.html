@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Color Mixer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+        
+        .color-display {
+            width: 150px;
+            height: 150px;
+            border-radius: 15px;
+            margin: 0 auto 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            transition: background-color 0.3s ease;
+            border: 5px solid #eee;
+        }
+        
+        .slider-group {
+            margin-bottom: 25px;
+            text-align: left;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        input[type="range"] {
+            width: 100%;
+            height: 8px;
+            cursor: pointer;
+            accent-color: #667eea;
+        }
+        
+        .value-display {
+            display: inline-block;
+            background: #f0f0f0;
+            padding: 8px 15px;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #667eea;
+            font-weight: 700;
+            margin-top: 8px;
+        }
+        
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        
+        button:hover {
+            background: #764ba2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Color Mixer</h1>
+        <div class="color-display" id="colorDisplay"></div>
+        
+        <div class="slider-group">
+            <label for="redSlider">Red</label>
+            <input type="range" id="redSlider" min="0" max="255" value="100">
+            <div class="value-display" id="redValue">100</div>
+        </div>
+        
+        <div class="slider-group">
+            <label for="greenSlider">Green</label>
+            <input type="range" id="greenSlider" min="0" max="255" value="150">
+            <div class="value-display" id="greenValue">150</div>
+        </div>
+        
+        <div class="slider-group">
+            <label for="blueSlider">Blue</label>
+            <input type="range" id="blueSlider" min="0" max="255" value="200">
+            <div class="value-display" id="blueValue
